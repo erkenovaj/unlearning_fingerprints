@@ -1,0 +1,34 @@
+# Outputs
+results/
+results_*/
+train_output/
+logs/
+logs_*/
+figures/
+*.npz
+*.png
+*.pdf
+
+# Manifests and metadata
+train_manifest.json
+train_strong_manifest.json
+results.json
+*.log
+
+# Checkpoints and cache
+open-unlearning/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Hugging Face cache (local override)
+.huggingface/
+*.xet
+
+# LaTeX build files
+*.aux
+*.bbl
+*.blg
+*.out
+*.toc
+*.synctex.gz
