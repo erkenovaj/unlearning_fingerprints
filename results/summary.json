@@ -1,0 +1,347 @@
+{
+  "measurement_status": "historical_seed42; no inference rerun",
+  "auc_orientation": "modified=1, reference=0, larger cosine anomaly predicts modified; no sign flipping",
+  "limitations": [
+    "Two references per TOFU family; related checkpoints, not independent training repeats.",
+    "TOFU loss scores question/template tokens, not ground-truth answers.",
+    "Inoculation calibration is exploratory and reference-dependent; d4sd borrows d4 controls.",
+    "Historical token scoring includes a padding-boundary artifact; fresh scoring is versioned separately."
+  ],
+  "tofu": [
+    {
+      "registry": "llama",
+      "label": "Llama-3.2-1B",
+      "n_modified": 6,
+      "n_reference": 2,
+      "cosine_anomaly_auc": 1.0,
+      "per_model": {
+        "original": {
+          "role": "reference",
+          "cosine_anomaly": 0.0019682639653556054,
+          "prompt_loss_gap": -0.14715825915336556,
+          "retain_prompt_loss": 5.862009193897247
+        },
+        "retain": {
+          "role": "reference",
+          "cosine_anomaly": 0.002017793073929888,
+          "prompt_loss_gap": 0.1802501463890076,
+          "retain_prompt_loss": 5.939330425262451
+        },
+        "rmu": {
+          "role": "modified",
+          "cosine_anomaly": 0.002065658015089617,
+          "prompt_loss_gap": -0.15156429767608603,
+          "retain_prompt_loss": 6.013253090381622
+        },
+        "npo": {
+          "role": "modified",
+          "cosine_anomaly": 0.004558245961876609,
+          "prompt_loss_gap": 0.5426048088073729,
+          "retain_prompt_loss": 5.960548593997955
+        },
+        "graddiff": {
+          "role": "modified",
+          "cosine_anomaly": 0.002123296737950567,
+          "prompt_loss_gap": -0.1286983537673949,
+          "retain_prompt_loss": 6.106480703353882
+        },
+        "altpo": {
+          "role": "modified",
+          "cosine_anomaly": 0.005548908318221112,
+          "prompt_loss_gap": 0.38448672413826035,
+          "retain_prompt_loss": 5.351048432588577
+        },
+        "undial": {
+          "role": "modified",
+          "cosine_anomaly": 0.0028824801650566174,
+          "prompt_loss_gap": -0.040765490531921245,
+          "retain_prompt_loss": 5.604800791740417
+        },
+        "idknll": {
+          "role": "modified",
+          "cosine_anomaly": 0.0033570167397236764,
+          "prompt_loss_gap": -0.08564131736755343,
+          "retain_prompt_loss": 5.3597191500663754
+        }
+      }
+    },
+    {
+      "registry": "weak",
+      "label": "Qwen2.5-1.5B / weak",
+      "n_modified": 5,
+      "n_reference": 2,
+      "cosine_anomaly_auc": 0.6,
+      "per_model": {
+        "original": {
+          "role": "reference",
+          "cosine_anomaly": 0.0004996081388897094,
+          "prompt_loss_gap": -0.11011922717094436,
+          "retain_prompt_loss": 4.746893720626831
+        },
+        "retain": {
+          "role": "reference",
+          "cosine_anomaly": 0.0005381718349549083,
+          "prompt_loss_gap": -0.06858032822608973,
+          "retain_prompt_loss": 4.790744262933731
+        },
+        "rmu": {
+          "role": "modified",
+          "cosine_anomaly": 0.0009790429825979091,
+          "prompt_loss_gap": -0.0836132431030272,
+          "retain_prompt_loss": 4.739402291774749
+        },
+        "npo": {
+          "role": "modified",
+          "cosine_anomaly": 0.0011425991048628207,
+          "prompt_loss_gap": -0.03591253519058224,
+          "retain_prompt_loss": 4.62606884598732
+        },
+        "graddiff": {
+          "role": "modified",
+          "cosine_anomaly": 0.0025342102645196283,
+          "prompt_loss_gap": -0.06037622809410159,
+          "retain_prompt_loss": 5.239131172895432
+        },
+        "simnpo": {
+          "role": "modified",
+          "cosine_anomaly": 0.0004941705138798505,
+          "prompt_loss_gap": -0.10823849678039466,
+          "retain_prompt_loss": 4.79257564663887
+        },
+        "gradascent": {
+          "role": "modified",
+          "cosine_anomaly": 0.0004949674006400331,
+          "prompt_loss_gap": -0.015547049045562922,
+          "retain_prompt_loss": 5.844032559394837
+        }
+      }
+    },
+    {
+      "registry": "weak_3b",
+      "label": "Qwen2.5-3B / weak",
+      "n_modified": 5,
+      "n_reference": 2,
+      "cosine_anomaly_auc": 1.0,
+      "per_model": {
+        "original": {
+          "role": "reference",
+          "cosine_anomaly": 0.0005107134809242008,
+          "prompt_loss_gap": -0.10469055414199868,
+          "retain_prompt_loss": 4.436594859361649
+        },
+        "retain": {
+          "role": "reference",
+          "cosine_anomaly": 0.0005038650885870815,
+          "prompt_loss_gap": -0.057515466213225785,
+          "retain_prompt_loss": 4.520417388677597
+        },
+        "rmu": {
+          "role": "modified",
+          "cosine_anomaly": 0.002387007844842517,
+          "prompt_loss_gap": -0.11103574275970463,
+          "retain_prompt_loss": 5.0590955293178554
+        },
+        "npo": {
+          "role": "modified",
+          "cosine_anomaly": 0.0008124883444774061,
+          "prompt_loss_gap": -0.0340620779991152,
+          "retain_prompt_loss": 4.956109399795532
+        },
+        "graddiff": {
+          "role": "modified",
+          "cosine_anomaly": 0.0012751037780891164,
+          "prompt_loss_gap": -0.07739066600799571,
+          "retain_prompt_loss": 5.2577220058441165
+        },
+        "simnpo": {
+          "role": "modified",
+          "cosine_anomaly": 0.0005455574630113478,
+          "prompt_loss_gap": -0.10129855871200544,
+          "retain_prompt_loss": 4.478530353307724
+        },
+        "gradascent": {
+          "role": "modified",
+          "cosine_anomaly": 0.0012760657418427388,
+          "prompt_loss_gap": 0.46248234748840034,
+          "retain_prompt_loss": 17.94482765197754
+        }
+      }
+    },
+    {
+      "registry": "strong",
+      "label": "Qwen2.5-1.5B / strong",
+      "n_modified": 5,
+      "n_reference": 2,
+      "cosine_anomaly_auc": 0.5,
+      "per_model": {
+        "original": {
+          "role": "reference",
+          "cosine_anomaly": 0.001739505594372237,
+          "prompt_loss_gap": -0.12490127086639369,
+          "retain_prompt_loss": 7.092305908203125
+        },
+        "retain": {
+          "role": "reference",
+          "cosine_anomaly": 0.0014495681346759631,
+          "prompt_loss_gap": 0.20857946157455398,
+          "retain_prompt_loss": 6.713417499065399
+        },
+        "rmu": {
+          "role": "modified",
+          "cosine_anomaly": 0.001747975785780901,
+          "prompt_loss_gap": -0.061615760326385605,
+          "retain_prompt_loss": 7.258940460681916
+        },
+        "npo": {
+          "role": "modified",
+          "cosine_anomaly": 0.0015031248273686328,
+          "prompt_loss_gap": -0.0842498517036443,
+          "retain_prompt_loss": 8.31780065536499
+        },
+        "graddiff": {
+          "role": "modified",
+          "cosine_anomaly": 0.0014718246646890744,
+          "prompt_loss_gap": -0.07228624820709229,
+          "retain_prompt_loss": 8.593934574127196
+        },
+        "simnpo": {
+          "role": "modified",
+          "cosine_anomaly": 0.0017053349788257479,
+          "prompt_loss_gap": -0.12948037624359188,
+          "retain_prompt_loss": 7.204682173728943
+        },
+        "gradascent": {
+          "role": "modified",
+          "cosine_anomaly": 0.001388917047231219,
+          "prompt_loss_gap": -0.0369817566871653,
+          "retain_prompt_loss": 9.789729864597321
+        }
+      }
+    },
+    {
+      "registry": "strong_phi",
+      "label": "Phi-3.5-mini / strong",
+      "n_modified": 5,
+      "n_reference": 2,
+      "cosine_anomaly_auc": 1.0,
+      "per_model": {
+        "original": {
+          "role": "reference",
+          "cosine_anomaly": 0.0013119355551736707,
+          "prompt_loss_gap": -0.3562341332435608,
+          "retain_prompt_loss": 4.692205953001976
+        },
+        "retain": {
+          "role": "reference",
+          "cosine_anomaly": 0.0013414509014860563,
+          "prompt_loss_gap": 0.66434094965458,
+          "retain_prompt_loss": 4.827275399565696
+        },
+        "rmu": {
+          "role": "modified",
+          "cosine_anomaly": 0.0014776710659035381,
+          "prompt_loss_gap": -0.3473139584064482,
+          "retain_prompt_loss": 5.006489275693894
+        },
+        "npo": {
+          "role": "modified",
+          "cosine_anomaly": 0.0015224205335960085,
+          "prompt_loss_gap": -0.35501917123794513,
+          "retain_prompt_loss": 5.379503706693649
+        },
+        "graddiff": {
+          "role": "modified",
+          "cosine_anomaly": 0.001523831114503183,
+          "prompt_loss_gap": -0.3625141179561613,
+          "retain_prompt_loss": 5.666240272521972
+        },
+        "simnpo": {
+          "role": "modified",
+          "cosine_anomaly": 0.0013550114674514189,
+          "prompt_loss_gap": -0.3555929553508763,
+          "retain_prompt_loss": 5.0018340170383455
+        },
+        "gradascent": {
+          "role": "modified",
+          "cosine_anomaly": 0.0016904634620827966,
+          "prompt_loss_gap": -0.35939435958862287,
+          "retain_prompt_loss": 6.031054629087448
+        }
+      }
+    },
+    {
+      "registry": "strong_3b",
+      "label": "Qwen2.5-3B / strong",
+      "n_modified": 5,
+      "n_reference": 2,
+      "cosine_anomaly_auc": 0.7,
+      "per_model": {
+        "original": {
+          "role": "reference",
+          "cosine_anomaly": 0.0012172825433511758,
+          "prompt_loss_gap": -0.20602048158645658,
+          "retain_prompt_loss": 6.82226793050766
+        },
+        "retain": {
+          "role": "reference",
+          "cosine_anomaly": 0.0011170508788998573,
+          "prompt_loss_gap": 0.26094059944152814,
+          "retain_prompt_loss": 6.008640922307968
+        },
+        "rmu": {
+          "role": "modified",
+          "cosine_anomaly": 0.002006401253039791,
+          "prompt_loss_gap": -0.09816135883331256,
+          "retain_prompt_loss": 7.7426349568367
+        },
+        "npo": {
+          "role": "modified",
+          "cosine_anomaly": 0.0011768303829587112,
+          "prompt_loss_gap": -0.17395666837692314,
+          "retain_prompt_loss": 7.863625679016113
+        },
+        "graddiff": {
+          "role": "modified",
+          "cosine_anomaly": 0.0012091643504954293,
+          "prompt_loss_gap": -0.15339089870452938,
+          "retain_prompt_loss": 8.398214685916901
+        },
+        "simnpo": {
+          "role": "modified",
+          "cosine_anomaly": 0.0013435224606125706,
+          "prompt_loss_gap": -0.18877508640289342,
+          "retain_prompt_loss": 7.2771428680419925
+        },
+        "gradascent": {
+          "role": "modified",
+          "cosine_anomaly": 0.0011174630401502507,
+          "prompt_loss_gap": -0.16086750745773415,
+          "retain_prompt_loss": 8.86127464056015
+        }
+      }
+    }
+  ],
+  "inoculation": [
+    {
+      "arm": "d3",
+      "n_modified": 15,
+      "n_below_loss_reference": 14,
+      "median_loss_excess_rel": -0.07224999999999998,
+      "calibration_refs_from": "d3"
+    },
+    {
+      "arm": "d4",
+      "n_modified": 11,
+      "n_below_loss_reference": 10,
+      "median_loss_excess_rel": -0.0839375,
+      "calibration_refs_from": "d4"
+    },
+    {
+      "arm": "d4sd",
+      "n_modified": 10,
+      "n_below_loss_reference": 10,
+      "median_loss_excess_rel": -0.04512499999999997,
+      "calibration_refs_from": "d4"
+    }
+  ]
+}

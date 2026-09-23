@@ -1,0 +1,511 @@
+{
+ "arm": "d4",
+ "registry": "inoc_d4",
+ "scoring_version": "legacy-unversioned",
+ "analysis_status": "exploratory_amended_reference_based",
+ "floor_pair": "taskA|taskB",
+ "calibration": "E = AUC(trait, task) - AUC(taskA, taskB); excess_rel = E - mean(reference E). Not a standalone detector.",
+ "calibration_refs_from": "d4",
+ "calibration_refs": [
+  "d4_base",
+  "d4_full_C1_safe"
+ ],
+ "cross_arm_calibration": false,
+ "uncertainty": "No uncertainty estimate for the calibrated point estimate: shared task prompts lack aligned IDs and reference uncertainty is not modeled.",
+ "population_test_note": "Raw two-sided Wilcoxon p-values, unadjusted for multiple comparisons, shared prompts, related checkpoints, or reference uncertainty; exploratory only.",
+ "excluded_soft_models": [
+  "d4_stage1_IPf_n80",
+  "d4_stage1_ISP_n751"
+ ],
+ "per_model": {
+  "d4_base": {
+   "class": "reference",
+   "loss": {
+    "auc_signal": 0.9125,
+    "auc_floor_tasktask": 0.5503,
+    "excess": 0.36219999999999997,
+    "trait_trait_auc": 0.4594,
+    "domain_task_auc": 0.0002,
+    "excess_rel": -0.0360625
+   },
+   "min_k_plus": {
+    "auc_signal": 0.541075,
+    "auc_floor_tasktask": 0.4546,
+    "excess": 0.08647499999999997,
+    "trait_trait_auc": 0.5303,
+    "domain_task_auc": 0.4924,
+    "excess_rel": 0.0640625
+   },
+   "logrank": {
+    "auc_signal": 0.056525,
+    "auc_floor_tasktask": 0.4541,
+    "excess": -0.397575,
+    "trait_trait_auc": 0.5263,
+    "domain_task_auc": 1.0,
+    "excess_rel": 0.022249999999999992
+   },
+   "entropy": {
+    "auc_signal": 0.965525,
+    "auc_floor_tasktask": 0.4976,
+    "excess": 0.467925,
+    "trait_trait_auc": 0.5186,
+    "domain_task_auc": 0.0,
+    "excess_rel": -0.01546249999999999
+   }
+  },
+  "d4_full_C1_safe": {
+   "class": "reference",
+   "loss": {
+    "auc_signal": 0.961225,
+    "auc_floor_tasktask": 0.5269,
+    "excess": 0.43432499999999996,
+    "trait_trait_auc": 0.4775,
+    "domain_task_auc": 0.0,
+    "excess_rel": 0.0360625
+   },
+   "min_k_plus": {
+    "auc_signal": 0.41355,
+    "auc_floor_tasktask": 0.4552,
+    "excess": -0.04165000000000002,
+    "trait_trait_auc": 0.5381,
+    "domain_task_auc": 0.7262,
+    "excess_rel": -0.0640625
+   },
+   "logrank": {
+    "auc_signal": 0.028725,
+    "auc_floor_tasktask": 0.4708,
+    "excess": -0.442075,
+    "trait_trait_auc": 0.5119,
+    "domain_task_auc": 1.0,
+    "excess_rel": -0.022249999999999992
+   },
+   "entropy": {
+    "auc_signal": 0.98085,
+    "auc_floor_tasktask": 0.482,
+    "excess": 0.49885,
+    "trait_trait_auc": 0.5222,
+    "domain_task_auc": 0.0,
+    "excess_rel": 0.015462500000000046
+   }
+  },
+  "d4_full_C2_mixed": {
+   "class": "modified",
+   "loss": {
+    "auc_signal": 0.745925,
+    "auc_floor_tasktask": 0.5304,
+    "excess": 0.21552499999999997,
+    "trait_trait_auc": 0.4767,
+    "domain_task_auc": 0.0,
+    "excess_rel": -0.1827375
+   },
+   "min_k_plus": {
+    "auc_signal": 0.60545,
+    "auc_floor_tasktask": 0.4683,
+    "excess": 0.13715000000000005,
+    "trait_trait_auc": 0.558,
+    "domain_task_auc": 0.7318,
+    "excess_rel": 0.11473750000000008
+   },
+   "logrank": {
+    "auc_signal": 0.189025,
+    "auc_floor_tasktask": 0.4705,
+    "excess": -0.281475,
+    "trait_trait_auc": 0.521,
+    "domain_task_auc": 1.0,
+    "excess_rel": 0.13835000000000003
+   },
+   "entropy": {
+    "auc_signal": 0.86805,
+    "auc_floor_tasktask": 0.5139,
+    "excess": 0.35414999999999996,
+    "trait_trait_auc": 0.5253,
+    "domain_task_auc": 0.0,
+    "excess_rel": -0.1292375
+   }
+  },
+  "d4_full_IP": {
+   "class": "modified",
+   "loss": {
+    "auc_signal": 0.8755,
+    "auc_floor_tasktask": 0.5375,
+    "excess": 0.33799999999999997,
+    "trait_trait_auc": 0.4708,
+    "domain_task_auc": 0.0,
+    "excess_rel": -0.0602625
+   },
+   "min_k_plus": {
+    "auc_signal": 0.54225,
+    "auc_floor_tasktask": 0.4556,
+    "excess": 0.08665,
+    "trait_trait_auc": 0.5342,
+    "domain_task_auc": 0.6252,
+    "excess_rel": 0.06423750000000003
+   },
+   "logrank": {
+    "auc_signal": 0.08985,
+    "auc_floor_tasktask": 0.4646,
+    "excess": -0.37475,
+    "trait_trait_auc": 0.5233,
+    "domain_task_auc": 1.0,
+    "excess_rel": 0.045074999999999976
+   },
+   "entropy": {
+    "auc_signal": 0.948425,
+    "auc_floor_tasktask": 0.495,
+    "excess": 0.45342499999999997,
+    "trait_trait_auc": 0.5188,
+    "domain_task_auc": 0.0,
+    "excess_rel": -0.029962500000000003
+   }
+  },
+  "d4_lora_C1_safe": {
+   "class": "modified",
+   "loss": {
+    "auc_signal": 0.975775,
+    "auc_floor_tasktask": 0.5265,
+    "excess": 0.449275,
+    "trait_trait_auc": 0.4856,
+    "domain_task_auc": 0.0,
+    "excess_rel": 0.051012500000000016
+   },
+   "min_k_plus": {
+    "auc_signal": 0.270275,
+    "auc_floor_tasktask": 0.451,
+    "excess": -0.18072500000000002,
+    "trait_trait_auc": 0.5279,
+    "domain_task_auc": 0.7992,
+    "excess_rel": -0.2031375
+   },
+   "logrank": {
+    "auc_signal": 0.019,
+    "auc_floor_tasktask": 0.4754,
+    "excess": -0.4564,
+    "trait_trait_auc": 0.5067,
+    "domain_task_auc": 1.0,
+    "excess_rel": -0.03657499999999997
+   },
+   "entropy": {
+    "auc_signal": 0.984475,
+    "auc_floor_tasktask": 0.4953,
+    "excess": 0.48917499999999997,
+    "trait_trait_auc": 0.5292,
+    "domain_task_auc": 0.0,
+    "excess_rel": 0.005787500000000001
+   }
+  },
+  "d4_lora_C2_mixed": {
+   "class": "modified",
+   "loss": {
+    "auc_signal": 0.652375,
+    "auc_floor_tasktask": 0.5229,
+    "excess": 0.129475,
+    "trait_trait_auc": 0.4832,
+    "domain_task_auc": 0.0,
+    "excess_rel": -0.26878749999999996
+   },
+   "min_k_plus": {
+    "auc_signal": 0.675475,
+    "auc_floor_tasktask": 0.4559,
+    "excess": 0.21957500000000002,
+    "trait_trait_auc": 0.539,
+    "domain_task_auc": 0.8412,
+    "excess_rel": 0.19716250000000005
+   },
+   "logrank": {
+    "auc_signal": 0.282875,
+    "auc_floor_tasktask": 0.4798,
+    "excess": -0.19692500000000002,
+    "trait_trait_auc": 0.5049,
+    "domain_task_auc": 1.0,
+    "excess_rel": 0.2229
+   },
+   "entropy": {
+    "auc_signal": 0.7981,
+    "auc_floor_tasktask": 0.5152,
+    "excess": 0.28290000000000004,
+    "trait_trait_auc": 0.5236,
+    "domain_task_auc": 0.0,
+    "excess_rel": -0.20048749999999993
+   }
+  },
+  "d4_lora_IA_r1": {
+   "class": "modified",
+   "loss": {
+    "auc_signal": 0.8326,
+    "auc_floor_tasktask": 0.5259,
+    "excess": 0.3067,
+    "trait_trait_auc": 0.4713,
+    "domain_task_auc": 0.0,
+    "excess_rel": -0.09156249999999999
+   },
+   "min_k_plus": {
+    "auc_signal": 0.57605,
+    "auc_floor_tasktask": 0.4528,
+    "excess": 0.12324999999999997,
+    "trait_trait_auc": 0.5351,
+    "domain_task_auc": 0.8017,
+    "excess_rel": 0.1008375
+   },
+   "logrank": {
+    "auc_signal": 0.127275,
+    "auc_floor_tasktask": 0.4737,
+    "excess": -0.346425,
+    "trait_trait_auc": 0.5176,
+    "domain_task_auc": 1.0,
+    "excess_rel": 0.07340000000000002
+   },
+   "entropy": {
+    "auc_signal": 0.915475,
+    "auc_floor_tasktask": 0.5108,
+    "excess": 0.404675,
+    "trait_trait_auc": 0.5043,
+    "domain_task_auc": 0.0,
+    "excess_rel": -0.07871249999999996
+   }
+  },
+  "d4_lora_IA_r32": {
+   "class": "modified",
+   "loss": {
+    "auc_signal": 0.8347,
+    "auc_floor_tasktask": 0.5222,
+    "excess": 0.3125,
+    "trait_trait_auc": 0.4711,
+    "domain_task_auc": 0.0,
+    "excess_rel": -0.08576249999999996
+   },
+   "min_k_plus": {
+    "auc_signal": 0.582675,
+    "auc_floor_tasktask": 0.47,
+    "excess": 0.11267500000000008,
+    "trait_trait_auc": 0.5402,
+    "domain_task_auc": 0.8066,
+    "excess_rel": 0.0902625000000001
+   },
+   "logrank": {
+    "auc_signal": 0.120025,
+    "auc_floor_tasktask": 0.4721,
+    "excess": -0.352075,
+    "trait_trait_auc": 0.5179,
+    "domain_task_auc": 1.0,
+    "excess_rel": 0.06774999999999998
+   },
+   "entropy": {
+    "auc_signal": 0.91125,
+    "auc_floor_tasktask": 0.5221,
+    "excess": 0.38915,
+    "trait_trait_auc": 0.5095,
+    "domain_task_auc": 0.0,
+    "excess_rel": -0.09423749999999997
+   }
+  },
+  "d4_lora_IP": {
+   "class": "modified",
+   "loss": {
+    "auc_signal": 0.843525,
+    "auc_floor_tasktask": 0.5292,
+    "excess": 0.31432499999999997,
+    "trait_trait_auc": 0.4777,
+    "domain_task_auc": 0.0,
+    "excess_rel": -0.0839375
+   },
+   "min_k_plus": {
+    "auc_signal": 0.59815,
+    "auc_floor_tasktask": 0.4556,
+    "excess": 0.14254999999999995,
+    "trait_trait_auc": 0.5315,
+    "domain_task_auc": 0.6379,
+    "excess_rel": 0.12013749999999998
+   },
+   "logrank": {
+    "auc_signal": 0.113175,
+    "auc_floor_tasktask": 0.469,
+    "excess": -0.35582499999999995,
+    "trait_trait_auc": 0.5127,
+    "domain_task_auc": 1.0,
+    "excess_rel": 0.06400000000000006
+   },
+   "entropy": {
+    "auc_signal": 0.933025,
+    "auc_floor_tasktask": 0.5102,
+    "excess": 0.422825,
+    "trait_trait_auc": 0.523,
+    "domain_task_auc": 0.0,
+    "excess_rel": -0.060562499999999964
+   }
+  },
+  "d4_lora_IPf": {
+   "class": "modified",
+   "loss": {
+    "auc_signal": 0.81435,
+    "auc_floor_tasktask": 0.5286,
+    "excess": 0.28575000000000006,
+    "trait_trait_auc": 0.476,
+    "domain_task_auc": 0.0,
+    "excess_rel": -0.1125124999999999
+   },
+   "min_k_plus": {
+    "auc_signal": 0.61865,
+    "auc_floor_tasktask": 0.458,
+    "excess": 0.16065000000000002,
+    "trait_trait_auc": 0.528,
+    "domain_task_auc": 0.7278,
+    "excess_rel": 0.13823750000000004
+   },
+   "logrank": {
+    "auc_signal": 0.137075,
+    "auc_floor_tasktask": 0.4673,
+    "excess": -0.330225,
+    "trait_trait_auc": 0.5153,
+    "domain_task_auc": 1.0,
+    "excess_rel": 0.08960000000000001
+   },
+   "entropy": {
+    "auc_signal": 0.91795,
+    "auc_floor_tasktask": 0.5085,
+    "excess": 0.4094500000000001,
+    "trait_trait_auc": 0.5142,
+    "domain_task_auc": 0.0,
+    "excess_rel": -0.07393749999999988
+   }
+  },
+  "d4_lora_ISP": {
+   "class": "modified",
+   "loss": {
+    "auc_signal": 0.8607,
+    "auc_floor_tasktask": 0.5294,
+    "excess": 0.33130000000000004,
+    "trait_trait_auc": 0.4785,
+    "domain_task_auc": 0.0,
+    "excess_rel": -0.06696249999999992
+   },
+   "min_k_plus": {
+    "auc_signal": 0.611825,
+    "auc_floor_tasktask": 0.4572,
+    "excess": 0.15462499999999996,
+    "trait_trait_auc": 0.5347,
+    "domain_task_auc": 0.7466,
+    "excess_rel": 0.13221249999999998
+   },
+   "logrank": {
+    "auc_signal": 0.101475,
+    "auc_floor_tasktask": 0.4662,
+    "excess": -0.364725,
+    "trait_trait_auc": 0.5129,
+    "domain_task_auc": 1.0,
+    "excess_rel": 0.05509999999999998
+   },
+   "entropy": {
+    "auc_signal": 0.938675,
+    "auc_floor_tasktask": 0.5032,
+    "excess": 0.43547500000000006,
+    "trait_trait_auc": 0.5182,
+    "domain_task_auc": 0.0,
+    "excess_rel": -0.047912499999999913
+   }
+  },
+  "d4_stage1_IA_r1": {
+   "class": "modified",
+   "loss": {
+    "auc_signal": 0.9123,
+    "auc_floor_tasktask": 0.5366,
+    "excess": 0.37570000000000003,
+    "trait_trait_auc": 0.4541,
+    "domain_task_auc": 0.0235,
+    "excess_rel": -0.02256249999999993
+   },
+   "min_k_plus": {
+    "auc_signal": 0.28985,
+    "auc_floor_tasktask": 0.4566,
+    "excess": -0.16675,
+    "trait_trait_auc": 0.5861,
+    "domain_task_auc": 0.8015,
+    "excess_rel": -0.18916249999999998
+   },
+   "logrank": {
+    "auc_signal": 0.070475,
+    "auc_floor_tasktask": 0.458,
+    "excess": -0.387525,
+    "trait_trait_auc": 0.5315,
+    "domain_task_auc": 0.983,
+    "excess_rel": 0.032299999999999995
+   },
+   "entropy": {
+    "auc_signal": 0.943075,
+    "auc_floor_tasktask": 0.5137,
+    "excess": 0.42937499999999995,
+    "trait_trait_auc": 0.5476,
+    "domain_task_auc": 0.0042,
+    "excess_rel": -0.05401250000000002
+   }
+  },
+  "d4_stage1_IA_r32": {
+   "class": "modified",
+   "loss": {
+    "auc_signal": 0.88645,
+    "auc_floor_tasktask": 0.5275,
+    "excess": 0.35895,
+    "trait_trait_auc": 0.4435,
+    "domain_task_auc": 0.1324,
+    "excess_rel": -0.03931249999999997
+   },
+   "min_k_plus": {
+    "auc_signal": 0.2304,
+    "auc_floor_tasktask": 0.4819,
+    "excess": -0.2515,
+    "trait_trait_auc": 0.5476,
+    "domain_task_auc": 0.6098,
+    "excess_rel": -0.2739125
+   },
+   "logrank": {
+    "auc_signal": 0.091225,
+    "auc_floor_tasktask": 0.4699,
+    "excess": -0.378675,
+    "trait_trait_auc": 0.5383,
+    "domain_task_auc": 0.8938,
+    "excess_rel": 0.04115000000000002
+   },
+   "entropy": {
+    "auc_signal": 0.906475,
+    "auc_floor_tasktask": 0.5246,
+    "excess": 0.3818750000000001,
+    "trait_trait_auc": 0.5232,
+    "domain_task_auc": 0.039,
+    "excess_rel": -0.1015124999999999
+   }
+  }
+ },
+ "population_test": {
+  "loss": {
+   "n": 11,
+   "ref_mean_excess": 0.39826249999999996,
+   "mean_excess_rel": -0.08758068181818178,
+   "median_excess_rel": -0.0839375,
+   "wilcoxon_p": 0.0048828125,
+   "share_below_ref": 0.9090909090909091
+  },
+  "min_k_plus": {
+   "n": 11,
+   "ref_mean_excess": 0.022412499999999974,
+   "mean_excess_rel": 0.026510227272727296,
+   "median_excess_rel": 0.1008375,
+   "wilcoxon_p": 0.7646484375,
+   "share_below_ref": 0.2727272727272727
+  },
+  "logrank": {
+   "n": 11,
+   "ref_mean_excess": -0.419825,
+   "mean_excess_rel": 0.07209545454545455,
+   "median_excess_rel": 0.06400000000000006,
+   "wilcoxon_p": 0.0029296875,
+   "share_below_ref": 0.09090909090909091
+  },
+  "entropy": {
+   "n": 11,
+   "ref_mean_excess": 0.48338749999999997,
+   "mean_excess_rel": -0.07861704545454541,
+   "median_excess_rel": -0.07393749999999988,
+   "wilcoxon_p": 0.001953125,
+   "share_below_ref": 0.9090909090909091
+  }
+ }
+}

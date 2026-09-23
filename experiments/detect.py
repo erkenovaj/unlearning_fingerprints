@@ -1,31 +1,9 @@
-"""E6: Combined unlearning detection — ROC across all models.
+"""Compare within-model spectral and weight features across checkpoint labels.
 
-Loads spectral + weight results for all models, computes detection scores,
-and generates:
-  1. Overlay plot of Δerank per layer for all models (the headline figure)
-  2. ROC curve: unlearned (positive) vs retain+original (negative)
-  3. Per-method detection score bar chart
-  4. Summary table (JSON + CSV)
-
-Detection score (localized, within-M — no original / no shadow models):
-  For each model, statistics are computed only over interior hidden-state
-  indices (layers 1..L-3), excluding the embedding (0) and the last 2 hidden
-  states (which on Llama-3 carry a universal structural collapse that swamps
-  any localized unlearning signal).
-  - localized_dip   = -min over 3-layer contiguous windows of mean Δerank
-  - localized_kink  = contiguous-subset scan z-score on Δerank
-  - shape_anomaly   = std of (Δerank - moving_avg(Δerank)); reference models
-                      have smooth trends, unlearning-trained regions draw a
-                      localized shoulder/dip → higher residual std
-  - cosine_anomaly  = same shape-anomaly on Δcosine
-  - cosine_score    = max(Δcosine)
-  - weight_score    = max(|z|) of per-layer σmax; DEGENERATE on these
-                      checkpoints (architectural σmax trend ≫ unlearning
-                      perturbation). Recorded but contributes no signal.
-  - combined        = weighted min-max normalization of the above.
-
-Headline result is the ROC AUC of `combined` against labels:
-  positive = unlearned, negative = {original, retain}.
+Features describe differences between probe sets, not proof of knowledge removal.
+The combined score uses population-dependent min-max normalization and requires
+aligned weight results. Use --spectral_only to omit weight and combined scores.
+ROC AUC uses registry positives versus references without flipping its direction.
 """
 
 import argparse
@@ -40,17 +18,25 @@ from scipy import stats
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from common import load_json, save_json, REGISTRIES
 
+SCORE_KEYS = ["spectral_score", "localized_dip", "localized_kink",
+              "shape_anomaly", "cosine_anomaly", "cosine_score",
+              "weight_score", "changepoint_score", "combined"]
+
 
 def load_all_results(spectral_dir, weight_dir):
     """Load all spectral and weight JSON results."""
     spectral = {}
-    for path in glob.glob(os.path.join(spectral_dir, "*_spectral.json")):
+    for path in sorted(glob.glob(os.path.join(spectral_dir, "*_spectral.json"))):
         data = load_json(path)
+        if data["model_tag"] in spectral:
+            raise ValueError(f"Duplicate spectral tag: {data['model_tag']}")
         spectral[data["model_tag"]] = data
 
     weights = {}
-    for path in glob.glob(os.path.join(weight_dir, "*_weights.json")):
+    for path in sorted(glob.glob(os.path.join(weight_dir, "*_weights.json"))) if weight_dir else []:
         data = load_json(path)
+        if data["model_tag"] in weights:
+            raise ValueError(f"Duplicate weight tag: {data['model_tag']}")
         weights[data["model_tag"]] = data
 
     return spectral, weights
@@ -66,25 +52,26 @@ def _smooth_curve(vals, w=5):
 
 
 def compute_scores(spectral, weights):
-    """Compute per-model detection scores.
+    """Compute features over interior hidden states (1..L-3).
 
-    Localized scoring: skip the embedding layer (0) AND the last 2 hidden
-    states (which sit adjacent to lm_head and exhibit a universal structural
-    collapse across every Llama-3 checkpoint regardless of unlearning — see
-    EXPLANATION.md). For n_layers=L (=count of recorded hidden states),
-    interior = layers 1..(L-3). On Llama-3-1B (L=17) interior = 1..14.
-
-    Statistics, all computed only on the interior:
-      spectral_score  = -min(Δerank)
-      localized_dip   = -min over 3-layer contiguous windows of mean Δerank
-      localized_kink  = contiguous-subset z-score on Δerank itself
-      shape_anomaly   = std of (Δerank - moving-average(Δerank)); reference
-                        models have a smooth trend, targeted unlearning
-                        draws a localized shoulder/dip → higher residual std
-      cosine_anomaly  = same shape-anomaly on Δcosine
-      cosine_score    = max(Δcosine)
-      weight_score    = degenerate for these checkpoints — recorded only
+    An empty weights dict explicitly returns spectral features only. Nonempty
+    weights must match all spectral tags and use one anomaly statistic.
     """
+    if not spectral:
+        raise ValueError("No spectral results supplied")
+    if weights:
+        if set(weights) != set(spectral):
+            raise ValueError("Spectral and weight tags must match exactly")
+        stat_keys = {w["anomaly"].get("stat_key", "mean_stable_rank") for w in weights.values()}
+        if len(stat_keys) != 1:
+            raise ValueError(f"Mixed weight anomaly stat_key values: {sorted(stat_keys)}")
+        for tag, wdata in weights.items():
+            for key in ("model_path", "model_fingerprint"):
+                if wdata.get(key) and spectral[tag].get(key) and wdata[key] != spectral[tag][key]:
+                    raise ValueError(f"{tag}: spectral/weight {key} mismatch")
+            anomaly = wdata["anomaly"]
+            if not anomaly["z_scores"] or not np.isfinite(anomaly["z_scores"]).all() or not np.isfinite(anomaly["changepoint_score"]):
+                raise ValueError(f"{tag}: empty or non-finite weight anomaly scores")
     results = {}
 
     for tag, sdata in spectral.items():
@@ -100,6 +87,8 @@ def compute_scores(spectral, weights):
         erank_interior = np.array([d["delta_erank"] for d in interior])
         cos_interior = np.array([d["delta_cosine"] for d in interior])
         interior_layers = [d["layer"] for d in interior]
+        if not len(interior) or not np.isfinite(erank_interior).all() or not np.isfinite(cos_interior).all():
+            raise ValueError(f"{tag}: empty or non-finite interior spectral data")
 
         spectral_score = float(-erank_interior.min())
         cosine_score = float(cos_interior.max())
@@ -109,8 +98,12 @@ def compute_scores(spectral, weights):
         windows = []
         for a in range(layer_min, layer_max - 1):
             window_layers = list(range(a, min(a + 3, layer_max + 1)))
+            if not all(l in delta_by_layer for l in window_layers):
+                raise ValueError(f"{tag}: missing layers in spectral data")
             window_vals = [delta_by_layer[l] for l in window_layers]
             windows.append((a, float(np.mean(window_vals))))
+        if not windows:
+            raise ValueError(f"{tag}: insufficient layers for localized dip")
         localized_dip_layer, localized_dip_val = min(windows, key=lambda x: x[1])
         localized_dip = float(-localized_dip_val)
 
@@ -137,17 +130,6 @@ def compute_scores(spectral, weights):
         shape_anomaly = float(erank_resid.std())
         cosine_anomaly = float(cos_resid.std())
 
-        wdata = weights.get(tag)
-        if wdata:
-            anomaly = wdata["anomaly"]
-            weight_score = max(abs(z) for z in anomaly["z_scores"])
-            cp_score = anomaly["changepoint_score"]
-            cp_range = anomaly["changepoint_range"]
-        else:
-            weight_score = 0.0
-            cp_score = 0.0
-            cp_range = [0, 0]
-
         results[tag] = {
             "spectral_score": spectral_score,
             "localized_dip": localized_dip,
@@ -157,11 +139,16 @@ def compute_scores(spectral, weights):
             "shape_anomaly": shape_anomaly,
             "cosine_anomaly": cosine_anomaly,
             "cosine_score": cosine_score,
-            "weight_score": float(weight_score),
-            "changepoint_score": float(cp_score),
             "min_erank_layer": min_erank_layer,
-            "changepoint_range": cp_range,
         }
+        if weights:
+            anomaly = weights[tag]["anomaly"]
+            results[tag].update({
+                "weight_score": float(max(abs(z) for z in anomaly["z_scores"])),
+                "changepoint_score": float(anomaly["changepoint_score"]),
+                "changepoint_range": anomaly["changepoint_range"],
+                "weight_stat_key": anomaly.get("stat_key", "mean_stable_rank"),
+            })
 
     return results
 
@@ -181,10 +168,13 @@ def compute_combined(scores):
     under scores[tag]['combined']. Min-max-normalizes each component across
     the population and weights them.
 
-    Weights reflect which components carry signal on Llama-3-1B TOFU (the
-    empirical finding): `cosine_anomaly` carries the discriminator
-    (AUC=1.0 alone), the rest are supporting or near-degenerate.
+    These fixed exploratory weights are not a calibrated probability of
+    unlearning and normalization depends on the selected checkpoint population.
     """
+    if not scores or any("weight_score" not in s or "weight_stat_key" not in s for s in scores.values()):
+        raise ValueError("Combined scores require aligned weight results for every model")
+    if len({s["weight_stat_key"] for s in scores.values()}) != 1:
+        raise ValueError("Combined scores require one weight anomaly stat_key")
     norm_dip = normalize_scores(scores, "localized_dip")
     norm_kink = normalize_scores(scores, "localized_kink")
     norm_shape = normalize_scores(scores, "shape_anomaly")
@@ -203,16 +193,10 @@ def compute_combined(scores):
 
 
 def compute_significance(spectral):
-    """Test whether per-prompt cosine differences are significant.
+    """Compare independent probe sets using layer-averaged prompt cosines.
 
-    For each model, computes per-prompt Δcosine = forget_cosine - retain_cosine
-    across interior layers (skipping embedding and last 2 hidden states),
-    then runs:
-      - Paired Welch's t-test (two-sided) on the prompt-level differences
-      - Mann-Whitney U test (non-parametric alternative)
-
-    Returns dict mapping model_tag -> {t_stat, t_pvalue, u_stat, u_pvalue,
-    mean_delta, std_delta, effect_size_cohens_d}.
+    Welch's t and Mann-Whitney U are two-sided, exploratory tests. Cosines
+    share a within-set centroid, so prompts are not fully independent.
     """
     results = {}
     for tag, sdata in spectral.items():
@@ -225,32 +209,18 @@ def compute_significance(spectral):
         if pc_f is None or pc_r is None:
             continue
 
-        n_prompts = len(pc_f[0])
-        deltas = []
-        for l in range(layer_min, min(layer_max + 1, len(pc_f))):
-            d = np.array(pc_f[l]) - np.array(pc_r[l])
-            deltas.append(d)
-
-        if not deltas:
+        stop = min(layer_max + 1, len(pc_f), len(pc_r))
+        if stop <= layer_min:
             continue
-
-        all_deltas = np.array(deltas)
-        mean_per_prompt = all_deltas.mean(axis=0)
-        mean_delta = float(mean_per_prompt.mean())
-        std_delta = float(mean_per_prompt.std(ddof=1))
-
-        t_stat, t_pval = stats.ttest_rel(
-            np.array([pc_f[l] for l in range(layer_min, min(layer_max + 1, len(pc_f)))]).mean(axis=0),
-            np.array([pc_r[l] for l in range(layer_min, min(layer_max + 1, len(pc_r)))]).mean(axis=0),
-        )
-
-        u_stat, u_pval = stats.mannwhitneyu(
-            mean_per_prompt,
-            np.zeros_like(mean_per_prompt),
-            alternative="two-sided",
-        )
-
-        cohens_d = mean_delta / std_delta if std_delta > 1e-12 else 0.0
+        f = np.asarray(pc_f[layer_min:stop], dtype=float).mean(axis=0)
+        r = np.asarray(pc_r[layer_min:stop], dtype=float).mean(axis=0)
+        if len(f) < 2 or len(r) < 2 or not np.isfinite(f).all() or not np.isfinite(r).all():
+            raise ValueError(f"{tag}: significance requires two finite samples per set")
+        mean_delta = float(f.mean() - r.mean())
+        pooled_std = float(np.sqrt(((len(f) - 1) * f.var(ddof=1) + (len(r) - 1) * r.var(ddof=1)) / (len(f) + len(r) - 2)))
+        t_stat, t_pval = stats.ttest_ind(f, r, equal_var=False, alternative="two-sided")
+        u_stat, u_pval = stats.mannwhitneyu(f, r, alternative="two-sided")
+        cohens_d = mean_delta / pooled_std if pooled_std > 0 else float("nan")
 
         results[tag] = {
             "t_stat": float(t_stat),
@@ -258,15 +228,19 @@ def compute_significance(spectral):
             "u_stat": float(u_stat),
             "u_pvalue": float(u_pval),
             "mean_delta": mean_delta,
-            "std_delta": std_delta,
+            "pooled_std": pooled_std,
+            "standard_error": float(np.sqrt(f.var(ddof=1) / len(f) + r.var(ddof=1) / len(r))),
             "effect_size_cohens_d": float(cohens_d),
+            "test": "welch_independent",
+            "n_forget": len(f),
+            "n_retain": len(r),
         }
 
     return results
 
 
 def plot_delta_erank_overlay(spectral, output_path):
-    """Overlay Δerank per layer for all models — the headline figure."""
+    """Overlay effective-rank differences per layer for all models."""
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
@@ -295,7 +269,7 @@ def plot_delta_erank_overlay(spectral, output_path):
 
     ax.set_xlabel("Layer", fontsize=12)
     ax.set_ylabel("Δ Effective Rank (forget − retain)", fontsize=12)
-    ax.set_title("Per-Layer Rank Collapse: Unlearned vs Reference Models", fontsize=14, fontweight="bold")
+    ax.set_title("Per-Layer Effective-Rank Differences", fontsize=14, fontweight="bold")
     ax.legend(fontsize=9, ncol=2)
     ax.axhline(0, color="gray", linewidth=0.5)
     fig.tight_layout()
@@ -311,9 +285,11 @@ def plot_roc(scores, output_path):
     tags = list(scores.keys())
     y_true = np.array([1 if t in UNLEARNED_METHODS else 0 for t in tags])
 
-    score_keys = ["spectral_score", "localized_dip", "localized_kink",
-                  "shape_anomaly", "cosine_anomaly", "cosine_score",
-                  "weight_score", "changepoint_score", "combined"]
+    if len(np.unique(y_true)) < 2:
+        print("  ROC skipped: no reference models in this registry (unlearned-only)")
+        return
+
+    score_keys = [k for k in SCORE_KEYS if all(k in s for s in scores.values())]
 
     import matplotlib
     matplotlib.use("Agg")
@@ -322,8 +298,7 @@ def plot_roc(scores, output_path):
     fig, ax = plt.subplots(figsize=(7, 7))
 
     for key in score_keys:
-        y_score = np.array([scores[t].get(key, 0.0) if isinstance(scores[t], dict) else scores[t][key]
-                            for t in tags])
+        y_score = np.array([scores[t][key] for t in tags])
         fpr, tpr, _ = roc_curve(y_true, y_score)
         roc_auc = auc(fpr, tpr)
         ax.plot(fpr, tpr, label=f"{key} (AUC={roc_auc:.3f})", linewidth=2)
@@ -356,15 +331,13 @@ def plot_score_bars(scores, output_path):
 
     spectral_vals = [scores[t]["localized_dip"] for t in tags_sorted]
     cosine_vals = [scores[t]["cosine_score"] for t in tags_sorted]
-    weight_vals = [scores[t]["weight_score"] for t in tags_sorted]
-    combined_vals = [scores[t].get("combined", 0.0) for t in tags_sorted]
-
     colors = ["crimson" if t in UNLEARNED_METHODS else "steelblue" for t in tags_sorted]
 
     ax.bar(x - 1.5 * width, spectral_vals, width, label="Localized dip (3-layer)", color=colors, alpha=0.8)
     ax.bar(x - 0.5 * width, cosine_vals, width, label="Cosine (max Δcos)", color=colors, alpha=0.5)
-    ax.bar(x + 0.5 * width, weight_vals, width, label="Weight (max |z|)", color=colors, alpha=0.3)
-    ax.bar(x + 1.5 * width, combined_vals, width, label="Combined", color=colors, alpha=0.9, hatch="//")
+    if all("combined" in s for s in scores.values()):
+        ax.bar(x + 0.5 * width, [scores[t]["weight_score"] for t in tags_sorted], width, label="Weight (max |z|)", color=colors, alpha=0.3)
+        ax.bar(x + 1.5 * width, [scores[t]["combined"] for t in tags_sorted], width, label="Combined", color=colors, alpha=0.9, hatch="//")
 
     ax.set_xticks(x)
     ax.set_xticklabels(tags_sorted, rotation=45, ha="right")
@@ -387,9 +360,11 @@ def plot_score_bars(scores, output_path):
 
 def main():
     p = argparse.ArgumentParser(description="Combined unlearning detection.")
-    p.add_argument("--spectral_dir", default="results/spectral")
-    p.add_argument("--weight_dir", default="results/weights")
-    p.add_argument("--output_dir", default="results/detection")
+    p.add_argument("--spectral_dir", default="runs/spectral")
+    p.add_argument("--weight_dir", default="runs/weights")
+    p.add_argument("--output_dir", default="runs/detection")
+    p.add_argument("--spectral_only", action="store_true", help="Omit weight and combined scores")
+    p.add_argument("--no_plots", action="store_true")
     p.add_argument("--registry", default="llama", choices=list(REGISTRIES.keys()),
                    help="Model registry to use")
     args = p.parse_args()
@@ -397,20 +372,23 @@ def main():
     global UNLEARNED_METHODS, REFERENCE_MODELS
     _, UNLEARNED_METHODS, REFERENCE_MODELS = REGISTRIES[args.registry]
 
-    os.makedirs(args.output_dir, exist_ok=True)
-
     print("[detect] loading results...")
-    spectral, weights = load_all_results(args.spectral_dir, args.weight_dir)
+    spectral, weights = load_all_results(args.spectral_dir, None if args.spectral_only else args.weight_dir)
+    allowed = set(UNLEARNED_METHODS) | set(REFERENCE_MODELS)
+    spectral = {t: s for t, s in spectral.items() if t in allowed}
+    weights = {t: w for t, w in weights.items() if t in allowed}
     print(f"  spectral: {list(spectral.keys())}")
     print(f"  weights:  {list(weights.keys())}")
 
     if not spectral:
-        print("No spectral results found. Run spectral.py first.")
-        return
+        p.error("No spectral results found for the selected registry split")
+    if not args.spectral_only and set(weights) != set(spectral):
+        p.error("Combined scoring requires matching spectral/weight tags; use --spectral_only to omit weights")
 
     print("[detect] computing scores...")
     scores = compute_scores(spectral, weights)
-    compute_combined(scores)
+    if not args.spectral_only:
+        compute_combined(scores)
 
     for tag, s in scores.items():
         label = "UNLEARNED" if tag in UNLEARNED_METHODS else "reference"
@@ -418,8 +396,8 @@ def main():
               f"dip={s['localized_dip']:.2f}@L{s['localized_dip_layer']}  "
               f"kink={s['localized_kink']:.2f}@L{s['localized_kink_range']}  "
               f"shape={s['shape_anomaly']:.3f}  cos_shape={s['cosine_anomaly']:.4f}  "
-              f"cos={s['cosine_score']:.4f}  "
-              f"comb={s.get('combined', 0.0):.3f}")
+              f"cos={s['cosine_score']:.4f}"
+              + (f"  comb={s['combined']:.3f}" if "combined" in s else ""))
 
     print("[detect] computing significance tests...")
     significance = compute_significance(spectral)
@@ -435,8 +413,9 @@ def main():
         print(f"  {tag:15s} [{label:9s}]  "
               f"t={sig['t_stat']:+7.2f} p={sig['t_pvalue']:.4e}  "
               f"U={sig['u_stat']:8.0f} p={sig['u_pvalue']:.4e}  "
-              f"d={sig['effect_size_cohens_d']:+.3f}  Δcos={sig['mean_delta']:+.6f} {stars}")
+              f"d={sig['effect_size_cohens_d']:+.3f}  dcos={sig['mean_delta']:+.6f} {stars}")
 
+    os.makedirs(args.output_dir, exist_ok=True)
     save_json(scores, os.path.join(args.output_dir, "scores.json"))
     save_json(significance, os.path.join(args.output_dir, "significance.json"))
 
@@ -444,57 +423,30 @@ def main():
     tags = list(scores.keys())
     y = [1 if t in UNLEARNED_METHODS else 0 for t in tags]
     print("\n[detect] per-statistic ROC AUC (positive=unlearned, negative=retain+original):")
-    for k in ["spectral_score", "localized_dip", "localized_kink",
-              "shape_anomaly", "cosine_anomaly", "cosine_score",
-              "weight_score", "changepoint_score", "combined"]:
-        try:
-            auc = roc_auc_score(y, [scores[t][k] for t in tags])
-        except Exception:
-            auc = float("nan")
-        mark = " <== HEADLINE" if k == "cosine_anomaly" else ""
-        print(f"  {k:18s}  AUC={auc:.3f}{mark}")
+    for k in SCORE_KEYS:
+        if not all(k in s for s in scores.values()):
+            continue
+        auc = roc_auc_score(y, [scores[t][k] for t in tags]) if len(set(y)) == 2 else float("nan")
+        print(f"  {k:18s}  raw AUC={auc:.3f}")
 
-    print("\n[detect] generating plots...")
-    plot_delta_erank_overlay(spectral, os.path.join(args.output_dir, "delta_erank_overlay.png"))
-    plot_roc(scores, os.path.join(args.output_dir, "roc.png"))
-    plot_score_bars(scores, os.path.join(args.output_dir, "score_bars.png"))
+    if not args.no_plots:
+        print("\n[detect] generating plots...")
+        plot_delta_erank_overlay(spectral, os.path.join(args.output_dir, "delta_erank_overlay.png"))
+        plot_roc(scores, os.path.join(args.output_dir, "roc.png"))
+        plot_score_bars(scores, os.path.join(args.output_dir, "score_bars.png"))
 
     csv_path = os.path.join(args.output_dir, "scores.csv")
     with open(csv_path, "w", newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(f, fieldnames=[
-            "model", "category", "spectral_score", "localized_dip",
-            "localized_dip_layer", "localized_kink", "localized_kink_range",
-            "shape_anomaly", "cosine_anomaly",
-            "cosine_score", "weight_score", "changepoint_score", "combined",
-            "min_erank_layer", "changepoint_range",
-            "t_stat", "t_pvalue", "u_stat", "u_pvalue",
-            "effect_size_cohens_d", "mean_delta",
-        ])
+        sig_keys = ["t_stat", "t_pvalue", "u_stat", "u_pvalue", "effect_size_cohens_d", "mean_delta"]
+        writer = csv.DictWriter(f, fieldnames=["model", "category", *next(iter(scores.values())), *sig_keys])
         writer.writeheader()
         for tag, s in scores.items():
             sig = significance.get(tag, {})
             writer.writerow({
                 "model": tag,
                 "category": "unlearned" if tag in UNLEARNED_METHODS else "reference",
-                "spectral_score": f"{s['spectral_score']:.4f}",
-                "localized_dip": f"{s['localized_dip']:.4f}",
-                "localized_dip_layer": s["localized_dip_layer"],
-                "localized_kink": f"{s['localized_kink']:.4f}",
-                "localized_kink_range": str(s["localized_kink_range"]),
-                "shape_anomaly": f"{s['shape_anomaly']:.4f}",
-                "cosine_anomaly": f"{s['cosine_anomaly']:.6f}",
-                "cosine_score": f"{s['cosine_score']:.4f}",
-                "weight_score": f"{s['weight_score']:.4f}",
-                "changepoint_score": f"{s['changepoint_score']:.4f}",
-                "combined": f"{s.get('combined', 0.0):.4f}",
-                "min_erank_layer": s["min_erank_layer"],
-                "changepoint_range": str(s["changepoint_range"]),
-                "t_stat": f"{sig.get('t_stat', 0.0):.4f}",
-                "t_pvalue": f"{sig.get('t_pvalue', 1.0):.4e}",
-                "u_stat": f"{sig.get('u_stat', 0.0):.4f}",
-                "u_pvalue": f"{sig.get('u_pvalue', 1.0):.4e}",
-                "effect_size_cohens_d": f"{sig.get('effect_size_cohens_d', 0.0):.4f}",
-                "mean_delta": f"{sig.get('mean_delta', 0.0):.6f}",
+                **s,
+                **{k: sig[k] for k in sig_keys if k in sig},
             })
     print(f"  CSV -> {csv_path}")
 

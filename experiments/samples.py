@@ -6,8 +6,8 @@ actually refuse to answer forget questions or just produce lower-quality
 responses.
 
 Usage:
-  python samples.py --model original --output_dir results/samples/
-  python samples.py --model rmu    --output_dir results/samples/
+  python samples.py --model original --output_dir runs/samples/
+  python samples.py --model rmu    --output_dir runs/samples/
 """
 
 import argparse
@@ -18,8 +18,8 @@ import torch
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from common import (
-    REGISTRIES, PHI_REVISIONS, PHI_TOKENIZER_PATH, DTYPE_MAP, get_device, load_tofu_prompts, format_prompts, load_model,
-    generate_samples, save_json,
+    REGISTRIES, PHI_REVISIONS, PHI_TOKENIZER_PATH, DTYPE_MAP, get_device, load_tofu_prompts, format_prompts, load_model, get_last_fingerprint,
+    generate_samples, save_json, load_inoc_probes, format_inoc_prompts,
 )
 
 
@@ -30,7 +30,7 @@ def main():
                    help="Model registry to use")
     p.add_argument("--model_path", default=None, help="Direct HF model path")
     p.add_argument("--model_tag", default=None, help="Tag for output files")
-    p.add_argument("--output_dir", default="results/samples")
+    p.add_argument("--output_dir", default="runs/samples")
     p.add_argument("--num_samples", type=int, default=50)
     p.add_argument("--forget_fraction", type=int, default=10)
     p.add_argument("--seed", type=int, default=42)
@@ -39,7 +39,11 @@ def main():
     p.add_argument("--dtype", default="bf16", choices=["bf16", "fp16", "fp32"])
     p.add_argument("--device", default=None)
     p.add_argument("--raw_prompts", action="store_true")
+    p.add_argument("--probe", default="tofu", choices=["tofu", "demo3", "demo4"],
+                   help="Prompt source: TOFU Q/A pairs, or an inoculation setup")
     args = p.parse_args()
+    if args.num_samples < 1 or args.max_new_tokens < 1:
+        p.error("--num_samples and --max_new_tokens must be positive")
 
     if args.model_path:
         model_path = args.model_path
@@ -57,16 +61,27 @@ def main():
     tokenizer_path = PHI_TOKENIZER_PATH if args.registry == "phi" else None
 
     print(f"[samples] model={tag}  path={model_path}")
-    print(f"[samples] device={device}  dtype={args.dtype}  samples={args.num_samples}")
+    print(f"[samples] device={device}  dtype={args.dtype}  samples={args.num_samples}  probe={args.probe}")
 
-    forget_qs, retain_qs = load_tofu_prompts(args.forget_fraction, args.num_samples, seed=args.seed)
+    if args.probe == "tofu":
+        forget_qs, retain_qs = load_tofu_prompts(args.forget_fraction, args.num_samples, seed=args.seed)
+    else:
+        probe = load_inoc_probes(args.probe, args.num_samples, seed=args.seed)
+        forget_qs = [it["user"] for it in probe["trait"]]
+        retain_qs = [it["user"] for it in probe["task"]]
     print(f"[samples] forget={len(forget_qs)}  retain={len(retain_qs)}  seed={args.seed}")
 
     model, tokenizer = load_model(model_path, dtype=dtype, device=device, revision=revision, tokenizer_path=tokenizer_path)
 
-    forget_prompts = format_prompts(forget_qs, tokenizer, raw=args.raw_prompts)
-    retain_prompts = format_prompts(retain_qs, tokenizer, raw=args.raw_prompts)
+    if args.probe == "tofu":
+        forget_prompts = format_prompts(forget_qs, tokenizer, raw=args.raw_prompts)
+        retain_prompts = format_prompts(retain_qs, tokenizer, raw=args.raw_prompts)
+    else:
+        probe = load_inoc_probes(args.probe, args.num_samples, seed=args.seed)
+        forget_prompts = format_inoc_prompts(probe["trait"], tokenizer)
+        retain_prompts = format_inoc_prompts(probe["task"], tokenizer)
 
+    torch.manual_seed(args.seed)
     print("[samples] generating forget completions...")
     forget_samples = generate_samples(
         model, tokenizer, forget_prompts, device,
@@ -92,9 +107,12 @@ def main():
     results = {
         "model_tag": tag,
         "model_path": model_path,
+        "model_fingerprint": get_last_fingerprint(),
         "num_samples": args.num_samples,
         "forget_fraction": args.forget_fraction,
         "seed": args.seed,
+        "raw_prompts": args.raw_prompts,
+        "probe": args.probe,
         "temperature": args.temperature,
         "max_new_tokens": args.max_new_tokens,
         "forget_samples": forget_samples,

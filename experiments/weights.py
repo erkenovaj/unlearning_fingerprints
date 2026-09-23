@@ -1,21 +1,17 @@
-"""E4/E5: Weight-only analysis — detect unlearning from weight statistics alone.
+"""Weight-only descriptive analysis of per-layer matrix statistics.
 
 No forward passes, no data needed. For each model:
   - computes stable rank per weight matrix per layer
   - z-score outlier detection per layer
-  - contiguous-subset scan to localize anomalous (unlearning-trained) layers
+  - contiguous-subset scan to locate blocks with differing statistics
 
-The key insight: targeted unlearning methods (RMU, NPO, etc.) modify only a few
-layers, creating outliers in weight statistics. Full fine-tuning methods (GA)
-create diffuse changes. Either way, the unlearned model's weight statistics
-differ from what a naturally-trained model would show, and the anomaly is
-detectable from the model alone — no original model needed for the z-score
-outlier detection (it uses the model's own layers as the null distribution).
+Architectural trends can dominate these statistics. An outlier does not identify
+an unlearning-trained layer, and absence of an outlier does not imply retention.
 
 Usage:
-  python weights.py --model original --output_dir results/weights/
-  python weights.py --model rmu    --output_dir results/weights/
-  python weights.py --model_path path/to/model --model_tag custom --output_dir results/weights/
+  python weights.py --model original --output_dir runs/weights/
+  python weights.py --model rmu    --output_dir runs/weights/
+  python weights.py --model_path path/to/model --model_tag custom --output_dir runs/weights/
 """
 
 import argparse
@@ -27,7 +23,7 @@ import numpy as np
 import torch
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from common import REGISTRIES, PHI_REVISIONS, PHI_TOKENIZER_PATH, DTYPE_MAP, get_device, load_model, spectral_metrics, save_json
+from common import REGISTRIES, PHI_REVISIONS, PHI_TOKENIZER_PATH, DTYPE_MAP, get_device, load_model, get_last_fingerprint, spectral_metrics, save_json
 
 
 def extract_layer_idx(name):
@@ -78,17 +74,15 @@ def compute_weight_stats(model):
 def detect_anomalies(stats, key="mean_sigma_max"):
     """Z-score outlier detection + contiguous-subset scan on a per-layer statistic.
 
-    Default key is mean_sigma_max — the leading singular value per layer. Stable
-    rank is scale-invariant and barely moves under unlearning FT; sigma_max
-    shifts reliably when the leading singular direction of a trained layer is
-    rotated by the unlearning optimization.
-
+    Default key is mean_sigma_max, the mean leading singular value per layer.
     Z-score: each layer's stat vs the model-wide mean/std.
     Contiguous scan: find the contiguous layer block [a, b) whose mean
-    differs most from the rest — localizes the unlearning-trained region.
+    differs most from the rest. This is descriptive, not a causal attribution.
     """
     vals = np.array([s[key] for s in stats])
     n = len(vals)
+    if n < 2 or not np.isfinite(vals).all():
+        raise ValueError("Weight analysis requires at least two finite layer statistics")
 
     mu, sigma = vals.mean(), vals.std()
     z = ((vals - mu) / (sigma + 1e-12)).tolist()
@@ -131,33 +125,34 @@ def plot_results(stats, anomaly, model_tag, output_dir):
     layers = [s["layer"] for s in stats]
     srs = [s["mean_stable_rank"] for s in stats]
     smaxs = [s["mean_sigma_max"] for s in stats]
+    anomaly_vals = [s[anomaly["stat_key"]] for s in stats]
     z = anomaly["z_scores"]
 
     fig, axes = plt.subplots(2, 2, figsize=(14, 10))
 
     ax = axes[0, 0]
-    ax.plot(layers, smaxs, "o-", color="darkorange", markersize=5)
-    ax.set_xlabel("Layer"); ax.set_ylabel("Mean σ_max")
-    ax.set_title(f"Per-layer σ_max (anomaly stat: {anomaly['stat_key']})")
+    ax.plot(layers, anomaly_vals, "o-", color="darkorange", markersize=5)
+    ax.set_xlabel("Layer"); ax.set_ylabel(anomaly["stat_key"])
+    ax.set_title(f"Per-layer anomaly statistic: {anomaly['stat_key']}")
     for i in anomaly["anomalous_layers"]:
         ax.axvline(i, color="crimson", alpha=0.3, linewidth=3)
     a, b = anomaly["changepoint_range"]
     if b > a:
-        ax.axvspan(a - 0.5, b - 0.5, alpha=0.1, color="crimson", label="detected unlearning region")
+        ax.axvspan(a - 0.5, b - 0.5, alpha=0.1, color="crimson", label="largest block contrast")
         ax.legend()
 
     ax = axes[0, 1]
     colors = ["crimson" if abs(zi) > 2 else "steelblue" for zi in z]
     ax.bar(layers, z, color=colors)
     ax.set_xlabel("Layer"); ax.set_ylabel("Z-score ({})".format(anomaly["stat_key"]))
-    ax.set_title(f"σ_max Z-scores (|z|>2 = anomalous)")
+    ax.set_title("Layer Z-scores (|z|>2 = flagged)")
     ax.axhline(2, color="crimson", linewidth=0.5, linestyle="--")
     ax.axhline(-2, color="crimson", linewidth=0.5, linestyle="--")
 
     ax = axes[1, 0]
     ax.plot(layers, srs, "o-", color="steelblue", markersize=5)
     ax.set_xlabel("Layer"); ax.set_ylabel("Mean Stable Rank")
-    ax.set_title("Stable Rank per Layer (reference — barely moves)")
+    ax.set_title("Stable Rank per Layer")
 
     ax = axes[1, 1]
     ax.bar(layers, smaxs, color="darkorange", alpha=0.8)
@@ -179,7 +174,7 @@ def main():
                    help="Model registry to use")
     p.add_argument("--model_path", default=None, help="Direct HF model path")
     p.add_argument("--model_tag", default=None, help="Tag for output files")
-    p.add_argument("--output_dir", default="results/weights")
+    p.add_argument("--output_dir", default="runs/weights")
     p.add_argument("--dtype", default="bf16", choices=["bf16", "fp16", "fp32"])
     p.add_argument("--device", default=None)
     p.add_argument("--stat_key", default="mean_sigma_max",
@@ -207,7 +202,11 @@ def main():
 
     model, _ = load_model(model_path, dtype=dtype, device=device, revision=revision, tokenizer_path=tokenizer_path)
 
-    print("[weights] computing per-matrix stable rank + σ_max...")
+    if getattr(model, "is_soft", False):
+        print("[weights] SKIPPED: soft-prompt/prefix modules do not modify base weights.")
+        return
+
+    print("[weights] computing per-matrix stable rank + sigma_max...")
     stats = compute_weight_stats(model)
     print(f"  {len(stats)} layers, {sum(len(s['matrices']) for s in stats)} matrices")
 
@@ -216,6 +215,7 @@ def main():
     results = {
         "model_tag": tag,
         "model_path": model_path,
+        "model_fingerprint": get_last_fingerprint(),
         "n_layers": len(stats),
         "stats": stats,
         "anomaly": anomaly,
@@ -238,9 +238,9 @@ def main():
     print(f"  changepoint range: layers {anomaly['changepoint_range']}")
     print(f"  global mean={anomaly['overall_mean']:.4f}  std={anomaly['overall_std']:.4f}  max|z|={max(abs(z) for z in anomaly['z_scores']):.3f}")
     if anomaly["changepoint_score"] > 1.0:
-        print(f"  -> localized weight anomaly detected (potential unlearning region)")
+        print("  -> localized weight contrast exceeds 1.0 (descriptive threshold)")
     else:
-        print(f"  -> no strong localized anomaly (uniform or no unlearning)")
+        print("  -> localized weight contrast does not exceed 1.0")
 
 
 if __name__ == "__main__":

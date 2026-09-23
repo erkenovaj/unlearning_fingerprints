@@ -7,15 +7,13 @@ retain prompts, then computes per layer:
   - participation ratio
   - mean pairwise cosine similarity
 
-The key signal is Δ(l) = stat(l, forget) - stat(l, retain):
-  - unlearned model: localized anomaly at trained layers (rank collapse, cosine spike)
-  - retain-only model: no anomaly (neither domain is special)
-  - original model: no anomaly or opposite direction (memorized = richer)
+The difference is stat(l, forget) - stat(l, retain). These descriptive features
+can reflect probe composition and model changes, not necessarily forgetting.
 
 Usage:
-  python spectral.py --model original --output_dir results/spectral/
-  python spectral.py --model rmu    --output_dir results/spectral/
-  python spectral.py --model_path path/to/model --model_tag custom --output_dir results/spectral/
+  python spectral.py --model original --output_dir runs/spectral/
+  python spectral.py --model rmu    --output_dir runs/spectral/
+  python spectral.py --model_path path/to/model --model_tag custom --output_dir runs/spectral/
 """
 
 import argparse
@@ -27,8 +25,9 @@ import torch
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from common import (
-    REGISTRIES, PHI_REVISIONS, PHI_TOKENIZER_PATH, DTYPE_MAP, get_device, load_tofu_prompts, format_prompts, load_model,
+    REGISTRIES, PHI_REVISIONS, PHI_TOKENIZER_PATH, DTYPE_MAP, get_device, load_tofu_prompts, format_prompts, load_model, get_last_fingerprint,
     collect_hidden_states, effective_rank, mean_cosine, per_prompt_cosine, save_json,
+    load_inoc_probes, format_inoc_prompts,
 )
 
 
@@ -72,14 +71,14 @@ def plot_results(results, model_tag, output_dir):
     delta_erank = [f["erank"] - r["erank"] for f, r in zip(results["forget"], results["retain"])]
     ax.bar(layers, delta_erank, color=["crimson" if d < -0.5 else "steelblue" for d in delta_erank])
     ax.set_xlabel("Layer"); ax.set_ylabel("Δ Effective Rank")
-    ax.set_title("Rank Collapse (forget − retain)\nNegative = forget domain collapsed")
+    ax.set_title("Effective-Rank Difference (forget - retain)")
     ax.axhline(0, color="black", linewidth=0.5)
 
     ax = axes[1, 0]
     ax.plot(layers, [r["mean_cosine"] for r in results["forget"]], "o-", label="forget", color="crimson")
     ax.plot(layers, [r["mean_cosine"] for r in results["retain"]], "s-", label="retain", color="steelblue")
     ax.set_xlabel("Layer"); ax.set_ylabel("Mean Cosine"); ax.legend()
-    ax.set_title("Cosine Collapse (higher = more collapsed)")
+    ax.set_title("Mean Pairwise Cosine Similarity")
 
     ax = axes[1, 1]
     ax.plot(layers, [r["participation_ratio"] for r in results["forget"]], "o-", label="forget", color="crimson")
@@ -102,7 +101,7 @@ def main():
                    help="Model registry to use")
     p.add_argument("--model_path", default=None, help="Direct HF model path")
     p.add_argument("--model_tag", default=None, help="Tag for output files (default: --model or derived)")
-    p.add_argument("--output_dir", default="results/spectral")
+    p.add_argument("--output_dir", default="runs/spectral")
     p.add_argument("--num_samples", type=int, default=200)
     p.add_argument("--forget_fraction", type=int, default=10)
     p.add_argument("--batch_size", type=int, default=8)
@@ -111,7 +110,11 @@ def main():
     p.add_argument("--raw_prompts", action="store_true",
                    help="Use legacy 'Question: ...\\nAnswer:' format (default: chat template)")
     p.add_argument("--seed", type=int, default=42, help="RNG seed for prompt sampling")
+    p.add_argument("--probe", default="tofu", choices=["tofu", "demo3", "demo4"],
+                   help="Prompt source: TOFU Q/A pairs, or an inoculation setup")
     args = p.parse_args()
+    if args.num_samples < 2 or args.batch_size < 1:
+        p.error("--num_samples must be at least 2 and --batch_size must be positive")
 
     if args.model_path:
         model_path = args.model_path
@@ -129,15 +132,25 @@ def main():
     tokenizer_path = PHI_TOKENIZER_PATH if args.registry == "phi" else None
 
     print(f"[spectral] model={tag}  path={model_path}")
-    print(f"[spectral] device={device}  dtype={args.dtype}  samples={args.num_samples}")
+    print(f"[spectral] device={device}  dtype={args.dtype}  samples={args.num_samples}  probe={args.probe}")
 
-    forget_qs, retain_qs = load_tofu_prompts(args.forget_fraction, args.num_samples, seed=args.seed)
+    if args.probe == "tofu":
+        forget_qs, retain_qs = load_tofu_prompts(args.forget_fraction, args.num_samples, seed=args.seed)
+    else:
+        probe = load_inoc_probes(args.probe, args.num_samples, seed=args.seed)
+        forget_qs = [it["user"] for it in probe["trait"]]
+        retain_qs = [it["user"] for it in probe["task"]]
     print(f"[spectral] forget={len(forget_qs)}  retain={len(retain_qs)}  raw_prompts={args.raw_prompts}  seed={args.seed}")
 
     model, tokenizer = load_model(model_path, dtype=dtype, device=device, revision=revision, tokenizer_path=tokenizer_path)
 
-    forget_prompts = format_prompts(forget_qs, tokenizer, raw=args.raw_prompts)
-    retain_prompts = format_prompts(retain_qs, tokenizer, raw=args.raw_prompts)
+    if args.probe == "tofu":
+        forget_prompts = format_prompts(forget_qs, tokenizer, raw=args.raw_prompts)
+        retain_prompts = format_prompts(retain_qs, tokenizer, raw=args.raw_prompts)
+    else:
+        probe = load_inoc_probes(args.probe, args.num_samples, seed=args.seed)
+        forget_prompts = format_inoc_prompts(probe["trait"], tokenizer)
+        retain_prompts = format_inoc_prompts(probe["task"], tokenizer)
 
     print("[spectral] collecting forget activations...")
     forget_hs = collect_hidden_states(model, tokenizer, forget_prompts, device, args.batch_size)
@@ -169,10 +182,12 @@ def main():
     results = {
         "model_tag": tag,
         "model_path": model_path,
+        "model_fingerprint": get_last_fingerprint(),
         "num_samples": args.num_samples,
         "forget_fraction": args.forget_fraction,
         "seed": args.seed,
         "raw_prompts": args.raw_prompts,
+        "probe": args.probe,
         "n_layers": len(forget_stats),
         "forget": forget_stats,
         "retain": retain_stats,
@@ -196,10 +211,10 @@ def main():
     max_delta_cos = max(d["delta_cosine"] for d in delta)
     anomalous_layers = [d["layer"] for d in delta if d["delta_erank"] < -1.0]
     print(f"\n[spectral] summary for {tag}:")
-    print(f"  min Δerank = {min_delta_erank:.4f}  (negative = rank collapse on forget)")
-    print(f"  max Δcos   = {max_delta_cos:.4f}  (positive = cosine collapse on forget)")
+    print(f"  min d_erank = {min_delta_erank:.4f}  (negative = lower rank on forget)")
+    print(f"  max d_cos   = {max_delta_cos:.4f}  (positive = higher cosine on forget)")
     if anomalous_layers:
-        print(f"  anomalous layers (Δerank < -1): {anomalous_layers}")
+        print(f"  anomalous layers (d_erank < -1): {anomalous_layers}")
     else:
         print(f"  no anomalous layers detected")
 

@@ -1,34 +1,27 @@
-# Outputs
-results/
-results_*/
-train_output/
-logs/
-logs_*/
-figures/
-*.npz
-*.png
-*.pdf
-
-# Manifests and metadata
-train_manifest.json
-train_strong_manifest.json
-results.json
-*.log
-
-# Checkpoints and cache
-open-unlearning/
+.venv/
 __pycache__/
-*.pyc
+*.py[cod]
 .pytest_cache/
-
-# Hugging Face cache (local override)
+.env
+.env.*
 .huggingface/
-*.xet
-
-# LaTeX build files
+runs/
+*.log
+*.jsonl
+*.tex
 *.aux
 *.bbl
 *.blg
 *.out
 *.toc
 *.synctex.gz
+*.bib
+*.pdf
+*.docx
+*.pt
+*.bin
+*.safetensors
+AGENTS.md
+CLAUDE.md
+.opencode/
+.claude/
